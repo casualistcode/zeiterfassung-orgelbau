@@ -1,0 +1,29 @@
+# Prüft bei jedem Hochladen, ob die App fehlerfrei baut (ohne Release).
+name: Prüfen
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Firebase-Datei bereitstellen
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: echo "$GOOGLE_SERVICES_JSON" | base64 -d > app/google-services.json
+
+      - name: Testen und bauen
+        run: gradle testDebugUnitTest assembleDebug --no-daemon

@@ -5,6 +5,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.Source
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -47,19 +48,74 @@ class Datenbank {
         )
     }
 
-    fun eintraegeAm(uid: String, datum: String): Flow<List<Eintrag>> = beobachte(
-        db.collection("eintraege").whereEqualTo("personUid", uid).whereEqualTo("datum", datum)
-    ) { d ->
+    /** Alle Einträge aller Personen (für Auswertung und eigene Liste; die Datenmenge ist klein). */
+    fun alleEintraege(): Flow<List<Eintrag>> = beobachte(db.collection("eintraege")) { d ->
+        val start = d.getLong("start") ?: 0L
         Eintrag(
             id = d.id,
+            person = d.getString("person") ?: "",
+            personUid = d.getString("personUid") ?: "",
+            baustelleId = d.getString("baustelleId") ?: "",
             baustelle = d.getString("baustelle") ?: "",
+            ort = d.getString("ort") ?: "",
+            kmEinfach = d.getDouble("kmEinfach"),
+            taetigkeitId = d.getString("taetigkeitId") ?: "",
             taetigkeit = d.getString("taetigkeit") ?: "",
             notiz = d.getString("notiz") ?: "",
-            start = d.getLong("start") ?: 0L,
-            ende = d.getLong("ende") ?: 0L,
+            start = start,
+            ende = d.getLong("ende") ?: start,
             pauseMin = (d.getLong("pauseMin") ?: 0L).toInt(),
             nettoMin = (d.getLong("nettoMin") ?: 0L).toInt(),
+            datum = d.getString("datum") ?: Zeitrechnung.datum(start),
+            quelle = d.getString("quelle") ?: "",
+            erstellt = d.getLong("erstellt") ?: 0L,
         )
+    }
+
+    /** Neuer oder geänderter Eintrag aus dem Formular. */
+    fun eintragSpeichern(e: EintragEntwurf, baustelle: Baustelle, taetigkeit: Taetigkeit) {
+        val z = Zeitrechnung.ausFormular(e.datum, e.beginn, e.ende, e.pauseMin)
+        val jetzt = System.currentTimeMillis()
+        val daten = mapOf(
+            "person" to e.person,
+            "personUid" to e.personUid,
+            "baustelleId" to baustelle.id,
+            "baustelle" to baustelle.name,
+            "ort" to baustelle.ort,
+            "kmEinfach" to baustelle.kmEinfach,
+            "taetigkeitId" to taetigkeit.id,
+            "taetigkeit" to taetigkeit.name,
+            "notiz" to e.notiz.trim(),
+            "start" to z.start,
+            "ende" to z.ende,
+            "pauseMin" to e.pauseMin,
+            "nettoMin" to z.nettoMin,
+            "datum" to e.datum.toString(),
+            "quelle" to e.quelle,
+            "erstellt" to (e.erstellt ?: jetzt),
+            "geaendert" to jetzt,
+        )
+        val ref = if (e.id == null) db.collection("eintraege").document() else db.collection("eintraege").document(e.id)
+        ref.set(daten, SetOptions.merge()).addOnFailureListener { Log.w(TAG, "eintragSpeichern", it) }
+    }
+
+    fun eintragLoeschen(id: String) {
+        db.collection("eintraege").document(id).delete().addOnFailureListener { Log.w(TAG, "eintragLoeschen", it) }
+    }
+
+    /** id == null legt eine neue Baustelle an. */
+    fun baustelleSpeichern(id: String?, name: String, ort: String, kmEinfach: Double?, archiviert: Boolean) {
+        val ref = if (id == null) db.collection("baustellen").document() else db.collection("baustellen").document(id)
+        val daten = mutableMapOf<String, Any?>("name" to name, "ort" to ort, "kmEinfach" to kmEinfach, "archiviert" to archiviert)
+        if (id == null) daten["erstellt"] = System.currentTimeMillis()
+        ref.set(daten, SetOptions.merge()).addOnFailureListener { Log.w(TAG, "baustelleSpeichern", it) }
+    }
+
+    /** id == null legt eine neue Tätigkeit an. */
+    fun taetigkeitSpeichern(id: String?, name: String, reihenfolge: Int, archiviert: Boolean) {
+        val ref = if (id == null) db.collection("taetigkeiten").document() else db.collection("taetigkeiten").document(id)
+        ref.set(mapOf("name" to name, "reihenfolge" to reihenfolge, "archiviert" to archiviert), SetOptions.merge())
+            .addOnFailureListener { Log.w(TAG, "taetigkeitSpeichern", it) }
     }
 
     fun laufend(uid: String): Flow<Laufend?> = callbackFlow {

@@ -2,31 +2,40 @@ package de.orgelbau.zeiterfassung
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,13 +73,72 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun App(vm: StempelViewModel = viewModel()) {
-    Box(Modifier.fillMaxSize().safeDrawingPadding()) {
-        when {
-            vm.person == null -> NamensSeite(vm::personSetzen)
-            vm.keinInternet -> KeinInternetSeite(vm::anmelden)
-            else -> StempelSeite(vm)
+fun App(vm: AppViewModel = viewModel()) {
+    val formular = vm.formular
+    when {
+        vm.person == null -> Box(Modifier.safeDrawingPadding()) { NamensSeite(vm::personSetzen) }
+        vm.keinInternet -> Box(Modifier.safeDrawingPadding()) { KeinInternetSeite(vm::anmelden) }
+        formular != null -> {
+            BackHandler(onBack = vm::formularSchliessen)
+            Box(Modifier.safeDrawingPadding()) { EintragFormular(vm, formular) }
         }
+        else -> Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            bottomBar = { Navigation(vm.seite) { vm.seite = it } },
+        ) { innen ->
+            Box(Modifier.padding(innen).consumeWindowInsets(innen)) {
+                when (vm.seite) {
+                    Seite.STEMPELN -> StempelSeite(vm)
+                    Seite.EINTRAEGE -> EintraegeSeite(vm)
+                    Seite.AUSWERTUNG -> AuswertungSeite(vm)
+                    Seite.LISTEN -> ListenSeite(vm)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun Navigation(aktiv: Seite, onWahl: (Seite) -> Unit) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+        Seite.entries.forEach { s ->
+            NavigationBarItem(
+                selected = s == aktiv,
+                onClick = { onWahl(s) },
+                icon = {
+                    Icon(
+                        when (s) {
+                            Seite.STEMPELN -> Icons.Filled.PlayArrow
+                            Seite.EINTRAEGE -> Icons.Filled.List
+                            Seite.AUSWERTUNG -> Icons.Filled.DateRange
+                            Seite.LISTEN -> Icons.Filled.Build
+                        },
+                        contentDescription = null,
+                    )
+                },
+                label = { Text(s.titel) },
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                ),
+            )
+        }
+    }
+}
+
+/** Gemeinsamer Rahmen der Seiten: Überschrift und scrollbarer Inhalt. */
+@Composable
+fun SeitenRahmen(titel: String, unterzeile: String? = null, inhalt: @Composable () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column {
+            Text(titel.uppercase(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            if (unterzeile != null) Text(unterzeile, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        inhalt()
     }
 }
 
@@ -114,11 +182,11 @@ fun KeinInternetSeite(onNochmal: () -> Unit) {
 }
 
 @Composable
-fun StempelSeite(vm: StempelViewModel) {
+fun StempelSeite(vm: AppViewModel) {
     val lauf by vm.lauf.collectAsStateWithLifecycle()
     val baustellen by vm.baustellen.collectAsStateWithLifecycle()
     val taetigkeiten by vm.taetigkeiten.collectAsStateWithLifecycle()
-    val heute by vm.heute.collectAsStateWithLifecycle()
+    val eintraege by vm.eintraege.collectAsStateWithLifecycle()
 
     var jetzt by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -128,21 +196,10 @@ fun StempelSeite(vm: StempelViewModel) {
         }
     }
     var stoppZeitpunkt by rememberSaveable { mutableStateOf<Long?>(null) }
+    val heuteDatum = Zeitrechnung.datum(jetzt)
+    val heute = eintraege.filter { it.datum == heuteDatum && vm.istMeiner(it) }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Column {
-            Text(
-                "ZEITERFASSUNG",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
-            )
-            Text(vm.person ?: "", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-
+    SeitenRahmen("Zeiterfassung", vm.person) {
         val l = lauf?.wert
         when {
             lauf == null -> Text("Wird geladen …", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -157,8 +214,7 @@ fun StempelSeite(vm: StempelViewModel) {
                 onStopp = { stoppZeitpunkt = System.currentTimeMillis() },
             )
         }
-
-        HeuteListe(heute)
+        HeuteListe(heute, vm::bearbeiten)
     }
 
     val zp = stoppZeitpunkt
@@ -177,7 +233,7 @@ fun StempelSeite(vm: StempelViewModel) {
 }
 
 @Composable
-fun StartBereich(vm: StempelViewModel, baustellen: List<Baustelle>, taetigkeiten: List<Taetigkeit>) {
+fun StartBereich(vm: AppViewModel, baustellen: List<Baustelle>, taetigkeiten: List<Taetigkeit>) {
     val baustelle = baustellen.find { it.id == vm.baustelleId && !it.archiviert }
     val taetigkeit = taetigkeiten.find { it.id == vm.taetigkeitId && !it.archiviert }
     AuswahlFeld(
@@ -218,7 +274,6 @@ fun LaufBereich(
     onStopp: () -> Unit,
 ) {
     val farben = LocalZustand.current
-    val farbe = if (lauf.inPause) farben.pause else farben.laeuft
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp),
@@ -229,14 +284,7 @@ fun LaufBereich(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Surface(color = farbe, shape = RoundedCornerShape(50)) {
-                Text(
-                    if (lauf.inPause) "PAUSE" else "LÄUFT",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
-                )
-            }
+            Schild(if (lauf.inPause) "PAUSE" else "LÄUFT", if (lauf.inPause) farben.pause else farben.laeuft)
             Text(
                 Zeitrechnung.hms(Zeitrechnung.arbeitMs(lauf.start, lauf.pausen, jetzt)),
                 fontSize = 56.sp,
@@ -298,107 +346,35 @@ fun StoppDialog(lauf: Laufend, zeitpunkt: Long, onSpeichern: (String) -> Unit, o
 }
 
 @Composable
-fun HeuteListe(heute: List<Eintrag>) {
+fun HeuteListe(heute: List<Eintrag>, onBearbeiten: (Eintrag) -> Unit) {
     if (heute.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "HEUTE",
-                style = MaterialTheme.typography.labelLarge,
-                letterSpacing = 1.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
+            Beschriftung("Heute", Modifier.weight(1f))
             Text("${Zeitrechnung.hMin(heute.sumOf { it.nettoMin })} h", fontWeight = FontWeight.Bold)
         }
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(14.dp),
-        ) {
+        Karte {
             heute.sortedBy { it.start }.forEachIndexed { i, e ->
                 if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "${Zeitrechnung.uhrzeit(e.start)}–${Zeitrechnung.uhrzeit(e.ende)}  ${e.baustelle}",
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        val text = listOf(e.taetigkeit, e.notiz).filter { it.isNotBlank() }.joinToString(" · ")
-                        if (text.isNotEmpty()) Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Text(Zeitrechnung.hMin(e.nettoMin), fontWeight = FontWeight.Bold)
-                }
+                EintragZeile(e, mitDatum = false) { onBearbeiten(e) }
             }
         }
     }
 }
 
+/** Ein Eintrag als antippbare Zeile (Stempeln, Einträge, Auswertung). */
 @Composable
-fun AuswahlFeld(titel: String, wert: String?, optionen: List<Pair<String, String>>, onWahl: (String) -> Unit) {
-    var offen by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            titel.uppercase(),
-            style = MaterialTheme.typography.labelLarge,
-            letterSpacing = 1.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        OutlinedButton(
-            onClick = { offen = true },
-            enabled = optionen.isNotEmpty(),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            ),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 68.dp),
-        ) {
-            Text(
-                wert ?: "Bitte wählen",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
-            )
-            Text("▾", style = MaterialTheme.typography.titleLarge)
-        }
+fun EintragZeile(e: Eintrag, mitDatum: Boolean, mitPerson: Boolean = false, onClick: () -> Unit) {
+    val zeit = "${Zeitrechnung.uhrzeit(e.start)}–${Zeitrechnung.uhrzeit(e.ende)}"
+    val kopf = buildString {
+        if (mitDatum) append(Zeitrechnung.tagText(e.datum)).append("  ")
+        append(zeit).append("  ").append(e.baustelle)
     }
-    if (offen) {
-        AlertDialog(
-            onDismissRequest = { offen = false },
-            title = { Text(titel) },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    optionen.forEach { (id, name) ->
-                        Text(
-                            name,
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onWahl(id); offen = false }
-                                .padding(vertical = 16.dp),
-                        )
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { offen = false }) { Text("Abbrechen") } },
-        )
-    }
-}
-
-@Composable
-fun GrosserKnopf(
-    text: String,
-    farbe: Color,
-    enabled: Boolean = true,
-    hoehe: Int = 96,
-    onClick: () -> Unit,
-) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = farbe, contentColor = Color.White),
-        modifier = Modifier.fillMaxWidth().height(hoehe.dp),
-    ) {
-        Text(text, fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-    }
+    val unten = listOfNotNull(
+        e.person.takeIf { mitPerson && it.isNotBlank() },
+        e.taetigkeit.ifBlank { null },
+        e.notiz.ifBlank { null },
+        if (e.pauseMin > 0) "Pause ${e.pauseMin} min" else null,
+    ).joinToString(" · ")
+    Zeile(kopf, Zeitrechnung.hMin(e.nettoMin), unten, onClick = onClick)
 }
