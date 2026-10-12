@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.Zeiterfassung" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/hintergrund</item>
+    </style>
+    <color name="hintergrund">#0F1614</color>
+</resources>

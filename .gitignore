@@ -1,0 +1,15 @@
+.gradle/
+.kotlin/
+build/
+local.properties
+.idea/
+*.iml
+captures/
+# Firebase-Zugangsdatei der App, wird nicht ins öffentliche Archiv hochgeladen
+app/google-services.json
+google-services.json
+# Signatur-Schlüssel der App, nur lokal und als GitHub-Secret
+schluessel/
+*.jks
+# Projektnotizen mit persönlichen Angaben bleiben lokal
+CLAUDE.md

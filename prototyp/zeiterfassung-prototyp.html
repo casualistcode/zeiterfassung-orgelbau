@@ -1,0 +1,785 @@
+<title>Baustellen-Zeiterfassung</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: one centered working column (max 720px) with an app-style tab bar fixed to the bottom */
+:root{
+  --bg:#EDF1EF; --surface:#FFFFFF; --sunk:#E2E8E5; --ink:#16211E; --muted:#56665F; --line:#C9D3CE;
+  --brass:#8C6210; --brass-soft:#F2E4C2; --go:#1D7448; --pause:#A06508; --stop:#AD3427; --on:#FFFFFF;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1614; --surface:#18211E; --sunk:#202B28; --ink:#E5EDE9; --muted:#93A39D; --line:#2D3A36;
+  --brass:#D8A748; --brass-soft:#382C12; --go:#23885A; --pause:#B07510; --stop:#BC4538; --on:#FFFFFF; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1614; --surface:#18211E; --sunk:#202B28; --ink:#E5EDE9; --muted:#93A39D; --line:#2D3A36;
+  --brass:#D8A748; --brass-soft:#382C12; --go:#23885A; --pause:#B07510; --stop:#BC4538; --on:#FFFFFF; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+.app{max-width:720px;margin:0 auto;padding-inline:16px;padding-block:12px 112px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:6px 14px}
+.brand{font-family:var(--f-display);font-weight:700;font-size:1.35rem;letter-spacing:.02em;text-transform:uppercase}
+.brand small{display:block;font-family:var(--f-body);font-weight:500;font-size:.75rem;letter-spacing:.06em;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.chip::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.chip.ok{color:var(--go)} .chip.wait{color:var(--pause)} .chip.off{color:var(--stop)}
+.banner{background:var(--brass-soft);color:var(--ink);border-radius:var(--r);padding:12px 14px;margin-bottom:14px;font-size:.92rem}
+main{display:flex;flex-direction:column;gap:18px}
+h2{font-family:var(--f-display);font-weight:700;font-size:1.3rem;letter-spacing:.02em;margin:0;text-wrap:balance}
+.label{font-size:.75rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)} .small{font-size:.88rem}
+p{margin:0}
+
+/* Stempeluhr */
+.clockcard{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:14px}
+.clockcard.is-run{border-color:var(--go);box-shadow:inset 0 0 0 1px var(--go)}
+.clockcard.is-pause{border-color:var(--pause);box-shadow:inset 0 0 0 1px var(--pause)}
+.state{display:flex;align-items:center;gap:8px;font-weight:600}
+.state .dot{width:12px;height:12px;border-radius:50%;background:var(--go)}
+.is-run .state{color:var(--go)} .is-pause .state{color:var(--pause)}
+.is-pause .state .dot{background:var(--pause)}
+@media (prefers-reduced-motion:no-preference){.is-run .state .dot{animation:pulse 1.6s ease-in-out infinite}}
+@keyframes pulse{50%{opacity:.35}}
+.clock{font-family:var(--f-display);font-weight:700;font-size:clamp(4rem,19vw,6.5rem);line-height:.95;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.clock.idle{color:var(--line)}
+.where{display:flex;flex-direction:column;gap:2px}
+.where strong{font-size:1.15rem}
+.where span{color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field>span{font-size:.75rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+select,input,textarea{width:100%;min-height:48px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:1rem}
+textarea{min-height:84px;resize:vertical}
+.fields2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fields3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.btnrow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.big{min-height:84px;border:0;border-radius:16px;font-family:var(--f-display);font-weight:700;font-size:1.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--on);cursor:pointer;touch-action:manipulation}
+.big.go{background:var(--go)} .big.pause{background:var(--pause)} .big.stop{background:var(--stop)}
+.big:active{transform:translateY(1px)}
+.wide{width:100%}
+
+/* Listen und Zeilen */
+.sechead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:8px}
+.rows{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.rows li+li{border-top:1px solid var(--line)}
+.row{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;width:100%;padding:12px 14px;background:none;border:0;text-align:left;cursor:pointer}
+.row:hover{background:var(--sunk)}
+.r-time{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.9rem;white-space:nowrap}
+.r-main{display:flex;flex-direction:column;min-width:0}
+.r-main span{color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}
+.r-main em{font-style:normal;font-size:.8rem;color:var(--brass);font-weight:600}
+.r-dur{font-family:var(--f-display);font-weight:700;font-size:1.25rem;font-variant-numeric:tabular-nums}
+.r-km{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.9rem;white-space:nowrap}
+.tag{display:inline-block;font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:6px;background:var(--brass-soft);color:var(--brass)}
+.sums{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.sums div,.stat{background:var(--sunk);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column}
+.sums span,.stat span{font-size:.75rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sums b,.stat b{font-family:var(--f-display);font-size:1.6rem;font-variant-numeric:tabular-nums}
+.stat small{color:var(--muted);font-variant-numeric:tabular-nums}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.day{margin-top:6px}
+.dayhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:10px 2px 6px}
+.dayhead b{font-variant-numeric:tabular-nums}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:20px;padding:22px 18px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.btn{min-height:44px;padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-weight:600;cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.danger{color:var(--stop);border-color:var(--stop)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.link{background:none;border:0;color:var(--brass);font-weight:600;cursor:pointer;padding:6px 0;min-height:36px}
+.seg{display:inline-flex;background:var(--sunk);border-radius:10px;padding:3px}
+.seg button{border:0;background:none;padding:8px 14px;border-radius:8px;font-weight:600;color:var(--muted);cursor:pointer;min-height:38px}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink)}
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.filters select{width:auto;min-width:0;flex:1 1 160px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:12px}
+.exports{display:flex;flex-wrap:wrap;gap:10px}
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tfoot td{font-weight:600;border-top:2px solid var(--line)}
+.listitem{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+
+/* Tab-Leiste */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs div{max-width:720px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+.tabs button{border:0;background:none;padding:10px 4px 12px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.78rem;font-weight:600;color:var(--muted);cursor:pointer;min-height:60px}
+.tabs svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tabs button[aria-current="page"]{color:var(--ink)}
+.tabs button[aria-current="page"] svg{stroke:var(--brass)}
+
+/* Eingabefenster */
+.sheet{position:fixed;inset:0;z-index:10;background:rgba(10,16,14,.5);display:flex;align-items:flex-end;justify-content:center}
+.sheet-panel{background:var(--surface);color:var(--ink);width:100%;max-width:560px;max-height:92%;overflow:auto;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+@media (min-width:640px){.sheet{align-items:center}.sheet-panel{border-radius:20px}}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:.95rem}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-variant-numeric:tabular-nums;font-weight:500}
+.err{color:var(--stop);font-weight:600;font-size:.92rem}
+.actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between}
+.actions>div{display:flex;flex-wrap:wrap;gap:10px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:20;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;max-width:calc(100% - 32px)}
+@media (max-width:520px){.stats{grid-template-columns:1fr 1fr}.fields3{grid-template-columns:1fr 1fr}.fields3 .field:last-child{grid-column:1/-1}}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">Zeiterfassung<small>Baustellen · Stunden · Kilometer</small></div>
+    <span id="sync" class="chip">Verbinde …</span>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+  <main id="main" aria-live="polite"></main>
+</div>
+
+<nav class="tabs" aria-label="Bereiche">
+  <div>
+    <button data-tab="stempeln"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>Stempeln</button>
+    <button data-tab="eintraege"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>Einträge</button>
+    <button data-tab="auswertung"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Auswertung</button>
+    <button data-tab="listen"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6"/></svg>Baustellen</button>
+  </div>
+</nav>
+
+<div id="sheet" class="sheet" hidden><div id="sheetPanel" class="sheet-panel" role="dialog" aria-modal="true"></div></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+"use strict";
+/* ---------- Hilfsfunktionen ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+const pad = n => String(n).padStart(2, "0");
+const dkey = t => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const hm = t => { const d = new Date(t); return pad(d.getHours()) + ":" + pad(d.getMinutes()); };
+const fmtMin = m => { m = Math.round(m || 0); return Math.floor(m/60) + ":" + pad(m % 60); };
+const fmtDec = m => ((m || 0)/60).toLocaleString("de-DE", {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtKm = k => (k || 0).toLocaleString("de-DE", {maximumFractionDigits:1});
+const fmtHMS = ms => { const s = Math.max(0, Math.floor(ms/1000)); return Math.floor(s/3600) + ":" + pad(Math.floor(s/60) % 60) + ":" + pad(s % 60); };
+const fmtDate = k => { const [y, m, d] = k.split("-"); return `${d}.${m}.${y}`; };
+const WD = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+const MON = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+const wday = k => WD[new Date(k + "T12:00").getDay()];
+const kw = k => { const d = new Date(k + "T12:00"); const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y0)/86400000 + 1)/7); };
+const kwKey = k => { const d = new Date(k + "T12:00"); const day = d.getDay() || 7; d.setDate(d.getDate() - day + 1); return dkey(d); };
+const newId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const slug = s => String(s || "").normalize("NFKD").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "alle";
+const pausenMs = (p, now) => (p || []).reduce((s, x) => s + ((x.bis ?? now) - x.von), 0);
+
+/* ---------- Zustand ---------- */
+const S = {
+  db:null, user:null, dl:null, uid:null, dbState:"connecting", readOnly:false,
+  tab: LS.get("zt.tab", "stempeln"),
+  sel: LS.get("zt.sel", {b:"", t:""}),
+  ev:  LS.get("zt.ev", {b:"", zeit:"gesamt", von:"", bis:"", p:""}),
+  ls:  LS.get("zt.ls", {wer:"ich", monat:""}),
+  showArch:false,
+  snap:{baustellen:new Map(), taetigkeiten:new Map(), eintraege:new Map(), laufend:new Map()},
+  loaded:{},
+  outbox: LS.get("zt.outbox", []),
+  names:{}
+};
+const me = () => S.uid || "lokal";
+
+/* Daten aus der Datenbank, ergänzt um noch nicht übertragene Änderungen */
+function coll(name){
+  const m = new Map(S.snap[name]);
+  for (const op of S.outbox){
+    const [c, id] = op.path.split("/");
+    if (c !== name) continue;
+    if (op.data === null) m.delete(id); else m.set(id, {...op.data, id});
+  }
+  return [...m.values()];
+}
+const byName = (a, b) => String(a.name).localeCompare(String(b.name), "de");
+const baustellen = () => coll("baustellen").sort(byName);
+const taetigkeiten = () => coll("taetigkeiten").sort(byName);
+const eintraege = () => coll("eintraege");
+const meine = () => eintraege().filter(e => e.person === me());
+const laufend = () => coll("laufend").find(x => x.id === me());
+const getB = id => coll("baustellen").find(b => b.id === id);
+const getT = id => coll("taetigkeiten").find(t => t.id === id);
+const eB = e => getB(e.baustelleId)?.name || e.baustelle || "Unbekannte Baustelle";
+const eT = e => (e.taetigkeitId && getT(e.taetigkeitId)?.name) || e.taetigkeit || "";
+const eKm = e => { const b = getB(e.baustelleId); return (b && b.kmEinfach > 0) ? b.kmEinfach : (e.kmEinfach || 0); };
+const pName = id => id === "lokal" ? "Ich (dieses Gerät)" : (S.names[id] || "Unbekannte Person");
+
+/* ---------- Speichern mit Warteschlange (funktioniert auch ohne Netz) ---------- */
+let flushing = false, inFlight = null;
+function queue(path, data){
+  S.outbox = S.outbox.filter(op => op === inFlight || op.path !== path);
+  S.outbox.push({path, data});
+  LS.set("zt.outbox", S.outbox);
+  scheduleRender();
+  flush();
+}
+const put = (path, data) => queue(path, data);
+const del = path => queue(path, null);
+async function flush(){
+  if (!S.db || flushing || S.readOnly) return;
+  flushing = true;
+  try{
+    while (S.outbox.length){
+      inFlight = S.outbox[0];
+      const ref = S.db.doc(inFlight.path);
+      try{
+        if (inFlight.data === null) await ref.delete(); else await ref.set(inFlight.data);
+        const done = inFlight;
+        // Lokale Kopie erst entfernen, wenn die Datenbank sie kennt
+        const [c, id] = done.path.split("/");
+        if (done.data === null) S.snap[c]?.delete(id); else S.snap[c]?.set(id, {...done.data, id});
+        S.outbox = S.outbox.filter(op => op !== done);
+        LS.set("zt.outbox", S.outbox);
+      }catch(e){
+        const code = e && e.code;
+        if (code === "invalid_argument" || code === "transform_error"){
+          S.readOnly = true;
+          showBanner("Du kannst diese Daten nur ansehen, nicht ändern. Bitte den Besitzer, dich als Mitwirkenden einzuladen.");
+        } else if (code === "quota_exceeded"){
+          showBanner("Der Speicher ist voll. Exportiere die alten Einträge und lösche sie, dann geht es weiter.");
+        }
+        break; // übrige Fehler: später erneut versuchen
+      }
+    }
+  } finally { inFlight = null; flushing = false; renderStatus(); }
+}
+
+/* ---------- Anzeige ---------- */
+let rq = 0;
+function scheduleRender(){ if (!rq) rq = requestAnimationFrame(() => { rq = 0; render(); }); }
+function render(){
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === S.tab ? "page" : "false"));
+  const focusId = document.activeElement && document.activeElement.closest("#main") ? document.activeElement.id : "";
+  const view = {stempeln:vStempeln, eintraege:vEintraege, auswertung:vAuswertung, listen:vListen}[S.tab] || vStempeln;
+  $("#main").innerHTML = view();
+  if (focusId){ const el = document.getElementById(focusId); if (el) el.focus(); }
+  renderStatus(); tick(); resolveNames();
+}
+function renderStatus(){
+  const el = $("#sync"); const n = S.outbox.length;
+  if (S.dbState === "connecting"){ el.className = "chip"; el.textContent = "Verbinde …"; return; }
+  if (!S.db){ el.className = "chip off"; el.textContent = n ? `${n} nur auf diesem Gerät` : "Nur dieses Gerät"; return; }
+  if (n){ el.className = "chip wait"; el.textContent = n === 1 ? "1 Änderung wartet" : `${n} Änderungen warten`; return; }
+  el.className = "chip ok"; el.textContent = "Online gespeichert";
+}
+function showBanner(t){ const b = $("#banner"); b.textContent = t; b.hidden = false; }
+let toastT = 0;
+function toast(t){ const el = $("#toast"); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 3200); }
+let namesBusy = false;
+async function resolveNames(){
+  if (!S.user || namesBusy) return;
+  const ids = [...new Set(eintraege().map(e => e.person).filter(id => id && id !== "lokal"))];
+  if (!ids.length) return;
+  namesBusy = true;
+  try{
+    const ps = await S.user.profiles(ids);
+    let changed = false;
+    for (const id of ids){ const n = (ps[id] && ps[id].name) || ""; if (n && S.names[id] !== n){ S.names[id] = n; changed = true; } }
+    if (changed) scheduleRender();
+  }catch(e){} finally { namesBusy = false; }
+}
+const loading = () => S.dbState === "connecting" || (S.db && !S.loaded.baustellen);
+
+function rowEntry(e, withPerson){
+  const desc = [eT(e), e.notiz].filter(Boolean).join(" · ");
+  return `<li><button class="row" data-act="edit-e" data-id="${esc(e.id)}">
+    <span class="r-time">${hm(e.start)}–${hm(e.ende)}</span>
+    <span class="r-main"><b>${esc(eB(e))}</b>${desc ? `<span>${esc(desc)}</span>` : ""}${withPerson ? `<em>${esc(pName(e.person))}</em>` : ""}</span>
+    <span class="r-dur">${fmtMin(e.nettoMin)}</span></button></li>`;
+}
+function options(list, sel, empty){
+  return (empty ? `<option value="">${esc(empty)}</option>` : "") +
+    list.map(x => `<option value="${esc(x.id)}"${x.id === sel ? " selected" : ""}>${esc(x.name)}${x.archiviert ? " (archiviert)" : ""}</option>`).join("");
+}
+
+/* Stempeln */
+function vStempeln(){
+  if (loading()) return `<section class="empty"><h2>Lade deine Baustellen …</h2><p class="muted">Einen Moment, die Daten werden abgerufen.</p></section>`;
+  const bs = baustellen().filter(b => !b.archiviert), ts = taetigkeiten().filter(t => !t.archiviert);
+  const run = laufend();
+  let h = "";
+  if (run){
+    const p = run.status === "pause";
+    const t = getT(run.taetigkeitId);
+    h += `<section class="clockcard ${p ? "is-pause" : "is-run"}">
+      <div class="state"><span class="dot"></span>${p ? "Pause" : "Läuft"} · Beginn ${hm(run.start)} Uhr</div>
+      <div id="clock" class="clock">0:00:00</div>
+      <div class="where"><strong>${esc(getB(run.baustelleId)?.name || "Baustelle")}</strong>${t ? `<span>${esc(t.name)}</span>` : ""}</div>
+      <div id="pauseInfo" class="muted small"></div>
+      <div class="btnrow">${p ? `<button class="big go" data-act="resume">Weiter</button>` : `<button class="big pause" data-act="pause">Pause</button>`}<button class="big stop" data-act="stop">Stopp</button></div>
+    </section>`;
+  } else if (!bs.length){
+    h += `<section class="empty"><h2>Noch keine Baustelle angelegt</h2>
+      <p>Leg zuerst eine Baustelle mit der einfachen Entfernung in Kilometern an. Danach wählst du sie hier aus und startest die Zeit.</p>
+      <button class="btn primary" data-act="new-b">Baustelle anlegen</button></section>`;
+  } else {
+    if (!bs.some(b => b.id === S.sel.b)) S.sel.b = bs[0].id;
+    if (S.sel.t && !ts.some(t => t.id === S.sel.t)) S.sel.t = "";
+    h += `<section class="clockcard">
+      <label class="field"><span>Baustelle</span><select id="selB">${options(bs, S.sel.b)}</select></label>
+      <label class="field"><span>Tätigkeit</span><select id="selT">${options(ts, S.sel.t, "Ohne Tätigkeit")}</select></label>
+      <div class="clock idle">0:00:00</div>
+      <button class="big go wide" data-act="start">Start</button>
+    </section>`;
+  }
+  const today = dkey(Date.now());
+  const heute = meine().filter(e => e.datum === today).sort((a, b) => a.start - b.start);
+  const sumHeute = heute.reduce((s, e) => s + e.nettoMin, 0);
+  const wk = kwKey(today);
+  const sumWoche = meine().filter(e => kwKey(e.datum) === wk).reduce((s, e) => s + e.nettoMin, 0);
+  h += `<section><div class="sechead"><h2>Heute, ${wday(today)} ${fmtDate(today)}</h2><button class="link" data-act="new-e">Zeit nachtragen</button></div>
+    ${heute.length ? `<ul class="rows">${heute.map(e => rowEntry(e)).join("")}</ul>` : `<p class="muted">Heute noch nichts erfasst. Vergessen zu stempeln? Über „Zeit nachtragen“ trägst du es von Hand ein.</p>`}
+    <div class="sums"><div><span>Heute</span><b>${fmtMin(sumHeute)} h</b></div><div><span>KW ${kw(today)}</span><b>${fmtMin(sumWoche)} h</b></div></div>
+  </section>`;
+  return h;
+}
+
+/* Einträge */
+function monthsOf(list){
+  const s = new Set(list.map(e => e.datum.slice(0, 7))); s.add(dkey(Date.now()).slice(0, 7));
+  return [...s].sort().reverse();
+}
+const monthLabel = m => MON[+m.slice(5) - 1] + " " + m.slice(0, 4);
+function vEintraege(){
+  if (loading()) return `<section class="empty"><h2>Lade Einträge …</h2></section>`;
+  const alle = S.ls.wer === "alle";
+  const base = alle ? eintraege() : meine();
+  const months = monthsOf(base);
+  if (!months.includes(S.ls.monat)) S.ls.monat = months[0];
+  const list = base.filter(e => e.datum.startsWith(S.ls.monat)).sort((a, b) => b.start - a.start);
+  const total = list.reduce((s, e) => s + e.nettoMin, 0);
+  const days = {};
+  list.forEach(e => (days[e.datum] = days[e.datum] || []).push(e));
+  let h = `<section class="filters">
+      <div class="seg" role="group" aria-label="Wessen Einträge">
+        <button data-act="wer" data-v="ich" aria-pressed="${!alle}">Meine</button>
+        <button data-act="wer" data-v="alle" aria-pressed="${alle}">Alle</button>
+      </div>
+      <select id="lsMonat" aria-label="Monat">${months.map(m => `<option value="${m}"${m === S.ls.monat ? " selected" : ""}>${monthLabel(m)}</option>`).join("")}</select>
+    </section>
+    <section class="sums" style="margin-top:0"><div><span>${monthLabel(S.ls.monat)}</span><b>${fmtMin(total)} h</b></div><div><span>Arbeitstage</span><b>${Object.keys(days).length}</b></div></section>
+    <div class="sechead"><span class="label">Einträge antippen zum Bearbeiten</span><button class="link" data-act="new-e">Zeit nachtragen</button></div>`;
+  if (!list.length) return h + `<p class="muted">In diesem Monat gibt es noch keine Einträge.</p>`;
+  let lastKw = null;
+  for (const [d, es] of Object.entries(days)){
+    const k = kw(d);
+    const sum = es.reduce((s, e) => s + e.nettoMin, 0);
+    h += `<section class="day"><div class="dayhead"><span>${wday(d)} ${fmtDate(d)} ${k !== lastKw ? `<span class="tag">KW ${k}</span>` : ""}</span><b>${fmtMin(sum)} h</b></div>
+      <ul class="rows">${es.slice().sort((a, b) => a.start - b.start).map(e => rowEntry(e, alle)).join("")}</ul></section>`;
+    lastKw = k;
+  }
+  return h;
+}
+
+/* Auswertung */
+function range(){
+  const now = new Date(), today = dkey(now);
+  switch (S.ev.zeit){
+    case "woche": { const a = kwKey(today); const b = new Date(a + "T12:00"); b.setDate(b.getDate() + 6); return {from:a, to:dkey(b), label:`KW ${kw(today)} (${fmtDate(a)} – ${fmtDate(dkey(b))})`}; }
+    case "monat": { const a = new Date(now.getFullYear(), now.getMonth(), 1), b = new Date(now.getFullYear(), now.getMonth() + 1, 0); return {from:dkey(a), to:dkey(b), label:MON[now.getMonth()] + " " + now.getFullYear()}; }
+    case "vormonat": { const a = new Date(now.getFullYear(), now.getMonth() - 1, 1), b = new Date(now.getFullYear(), now.getMonth(), 0); return {from:dkey(a), to:dkey(b), label:MON[a.getMonth()] + " " + a.getFullYear()}; }
+    case "frei": { const f = S.ev.von || "", t = S.ev.bis || ""; return {from:f, to:t, label:(f ? fmtDate(f) : "Anfang") + " – " + (t ? fmtDate(t) : "heute")}; }
+    default: return {from:"", to:"", label:"Gesamter Zeitraum"};
+  }
+}
+function evalData(){
+  const r = range();
+  const es = eintraege().filter(e => (!S.ev.b || e.baustelleId === S.ev.b) && (!r.from || e.datum >= r.from) && (!r.to || e.datum <= r.to) && (!S.ev.p || e.person === S.ev.p)).sort((a, b) => a.start - b.start);
+  const persons = new Map(), taets = new Map(), kmDays = new Map();
+  let total = 0;
+  for (const e of es){
+    total += e.nettoMin;
+    const p = persons.get(e.person) || {id:e.person, min:0, days:new Set(), km:0};
+    p.min += e.nettoMin; p.days.add(e.datum); persons.set(e.person, p);
+    const t = eT(e) || "Ohne Tätigkeit"; taets.set(t, (taets.get(t) || 0) + e.nettoMin);
+    // Kilometer: pro Person, Tag und Baustelle einmal Hin- und Rückfahrt
+    const key = e.person + "|" + e.datum + "|" + e.baustelleId;
+    if (!kmDays.has(key)){ const km = 2 * eKm(e); kmDays.set(key, km); p.km += km; }
+  }
+  const km = [...kmDays.values()].reduce((s, x) => s + x, 0);
+  const b = S.ev.b ? getB(S.ev.b) : null;
+  return {es, total, km, days:new Set(es.map(e => e.datum)).size, persons:[...persons.values()].sort((a, b) => b.min - a.min), taets:[...taets.entries()].sort((a, b) => b[1] - a[1]), r, b, bLabel: b ? b.name : "Alle Baustellen"};
+}
+function vAuswertung(){
+  if (loading()) return `<section class="empty"><h2>Lade Auswertung …</h2></section>`;
+  const all = eintraege();
+  if (S.ev.b && !getB(S.ev.b)) S.ev.b = "";
+  if (!S.ev.b && !S.ev.chosen && all.length){ S.ev.b = all.slice().sort((a, b) => b.start - a.start)[0].baustelleId; }
+  const people = [...new Set(all.map(e => e.person))];
+  const d = evalData();
+  let h = `<section class="panel">
+    <label class="field"><span>Baustelle</span><select id="evB">${options(baustellen(), S.ev.b, "Alle Baustellen")}</select></label>
+    <div class="fields2">
+      <label class="field"><span>Zeitraum</span><select id="evZeit">
+        ${[["gesamt","Gesamt"],["woche","Diese Woche"],["monat","Dieser Monat"],["vormonat","Letzter Monat"],["frei","Eigener Zeitraum"]].map(([v, l]) => `<option value="${v}"${S.ev.zeit === v ? " selected" : ""}>${l}</option>`).join("")}
+      </select></label>
+      <label class="field"><span>Person</span><select id="evP"><option value="">Alle Personen</option>${people.map(id => `<option value="${esc(id)}"${S.ev.p === id ? " selected" : ""}>${esc(pName(id))}</option>`).join("")}</select></label>
+    </div>
+    ${S.ev.zeit === "frei" ? `<div class="fields2"><label class="field"><span>Von</span><input type="date" id="evVon" value="${esc(S.ev.von)}"></label><label class="field"><span>Bis</span><input type="date" id="evBis" value="${esc(S.ev.bis)}"></label></div>` : ""}
+  </section>
+  <section>
+    <div class="sechead"><h2>${esc(d.bLabel)}</h2><span class="muted small">${esc(d.r.label)}</span></div>
+    <div class="stats">
+      <div class="stat"><span>Arbeitszeit</span><b>${fmtMin(d.total)} h</b><small>${fmtDec(d.total)} h dezimal</small></div>
+      <div class="stat"><span>Arbeitstage</span><b>${d.days}</b></div>
+      <div class="stat"><span>Kilometer</span><b>${fmtKm(d.km)}</b><small>Hin + Rück je Tag</small></div>
+      <div class="stat"><span>Personen</span><b>${d.persons.length}</b></div>
+    </div>
+  </section>
+  <section class="panel"><span class="label">Nachweis ausgeben</span>
+    ${S.dl ? `<div class="exports"><button class="btn primary" data-act="exp-pdf"${d.es.length ? "" : " disabled"}>PDF-Nachweis</button><button class="btn" data-act="exp-xlsx"${d.es.length ? "" : " disabled"}>Excel-Tabelle</button></div>
+      <p class="muted small">Die Datei landet auf deinem Gerät. Von dort kannst du sie per E-Mail oder WhatsApp verschicken.</p>`
+      : `<p class="muted small">Dateien speichern ist in dieser Ansicht nicht möglich. Öffne die App in der Claude-App oder unter claude.ai.</p>`}
+  </section>`;
+  if (!d.es.length) return h + `<p class="muted">Für diese Auswahl gibt es noch keine Einträge.</p>`;
+  h += `<section><h2 style="margin-bottom:8px">Nach Person</h2><div class="tablewrap"><table>
+    <thead><tr><th>Person</th><th class="num">Tage</th><th class="num">Stunden</th><th class="num">km</th></tr></thead>
+    <tbody>${d.persons.map(p => `<tr><td>${esc(pName(p.id))}</td><td class="num">${p.days.size}</td><td class="num">${fmtMin(p.min)}</td><td class="num">${fmtKm(p.km)}</td></tr>`).join("")}</tbody>
+    <tfoot><tr><td>Summe</td><td class="num">${d.days}</td><td class="num">${fmtMin(d.total)}</td><td class="num">${fmtKm(d.km)}</td></tr></tfoot></table></div></section>
+  <section><h2 style="margin-bottom:8px">Nach Tätigkeit</h2><div class="tablewrap"><table>
+    <thead><tr><th>Tätigkeit</th><th class="num">Stunden</th><th class="num">Anteil</th></tr></thead>
+    <tbody>${d.taets.map(([t, m]) => `<tr><td>${esc(t)}</td><td class="num">${fmtMin(m)}</td><td class="num">${d.total ? Math.round(m / d.total * 100) : 0} %</td></tr>`).join("")}</tbody></table></div></section>
+  <section><h2 style="margin-bottom:8px">Einzelnachweis</h2><div class="tablewrap"><table>
+    <thead><tr><th>Datum</th><th>Person</th>${S.ev.b ? "" : "<th>Baustelle</th>"}<th>Arbeit</th><th class="num">Zeit</th><th class="num">Pause</th><th class="num">Std.</th></tr></thead>
+    <tbody>${d.es.map(e => `<tr><td class="num">${wday(e.datum)} ${fmtDate(e.datum)}</td><td>${esc(pName(e.person))}</td>${S.ev.b ? "" : `<td>${esc(eB(e))}</td>`}<td>${esc([eT(e), e.notiz].filter(Boolean).join(" · "))}</td><td class="num">${hm(e.start)}–${hm(e.ende)}</td><td class="num">${e.pauseMin ? e.pauseMin + " min" : "–"}</td><td class="num">${fmtMin(e.nettoMin)}</td></tr>`).join("")}</tbody></table></div></section>`;
+  return h;
+}
+
+/* Baustellen & Tätigkeiten */
+function vListen(){
+  if (loading()) return `<section class="empty"><h2>Lade Listen …</h2></section>`;
+  const bs = baustellen().filter(b => S.showArch || !b.archiviert);
+  const ts = taetigkeiten().filter(t => S.showArch || !t.archiviert);
+  const nArch = baustellen().filter(b => b.archiviert).length + taetigkeiten().filter(t => t.archiviert).length;
+  return `<section><div class="sechead"><h2>Baustellen</h2><button class="link" data-act="new-b">+ Neue Baustelle</button></div>
+    ${bs.length ? `<ul class="rows">${bs.map(b => `<li><button class="row" data-act="edit-b" data-id="${esc(b.id)}" style="grid-template-columns:1fr auto">
+      <span class="r-main"><b>${esc(b.name)}${b.archiviert ? ' <span class="tag">archiviert</span>' : ""}</b>${b.ort ? `<span>${esc(b.ort)}</span>` : ""}</span>
+      <span class="r-km">${b.kmEinfach > 0 ? fmtKm(b.kmEinfach) + " km einfach" : '<span class="tag">km fehlt</span>'}</span></button></li>`).join("")}</ul>` : `<p class="muted">Noch keine Baustellen.</p>`}
+  </section>
+  <section><div class="sechead"><h2>Tätigkeiten</h2><button class="link" data-act="new-t">+ Neue Tätigkeit</button></div>
+    ${ts.length ? `<ul class="rows">${ts.map(t => `<li><button class="row" data-act="edit-t" data-id="${esc(t.id)}" style="grid-template-columns:1fr"><span class="r-main"><b>${esc(t.name)}${t.archiviert ? ' <span class="tag">archiviert</span>' : ""}</b></span></button></li>`).join("")}</ul>` : `<p class="muted">Noch keine Tätigkeiten.</p>`}
+    ${nArch ? `<button class="link" data-act="toggle-arch">${S.showArch ? "Archivierte ausblenden" : `Archivierte anzeigen (${nArch})`}</button>` : ""}
+  </section>
+  <section class="panel"><span class="label">Alle Daten sichern</span>
+    <p class="small">Lädt sämtliche Einträge, Baustellen und Tätigkeiten herunter. So kannst du jederzeit in ein anderes System umziehen.</p>
+    ${S.dl ? `<div class="exports"><button class="btn" data-act="all-xlsx">Alles als Excel</button><button class="btn" data-act="all-csv">Einträge als CSV</button></div>` : `<p class="muted small">Dateien speichern ist in dieser Ansicht nicht möglich.</p>`}
+  </section>`;
+}
+
+/* ---------- Uhr ---------- */
+function tick(){
+  const run = laufend(); const c = document.getElementById("clock");
+  if (!run || !c) return;
+  const now = Date.now();
+  c.textContent = fmtHMS(now - run.start - pausenMs(run.pausen, now));
+  const pi = document.getElementById("pauseInfo");
+  const pm = pausenMs(run.pausen, now);
+  if (pi) pi.textContent = pm >= 60000 ? `Pause bisher: ${fmtMin(pm / 60000)} h` : "";
+}
+
+/* ---------- Eingabefenster ---------- */
+function openSheet(html, bind){
+  const p = $("#sheetPanel"); p.innerHTML = html; $("#sheet").hidden = false;
+  bind && bind(p);
+  const f = p.querySelector("input,select,textarea,button"); if (f) f.focus();
+}
+function closeSheet(){ $("#sheet").hidden = true; $("#sheetPanel").innerHTML = ""; }
+$("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") closeSheet(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
+function confirmBtn(btn, label, fn){
+  if (btn.dataset.armed){ fn(); return; }
+  btn.dataset.armed = "1"; const old = btn.textContent; btn.textContent = label;
+  setTimeout(() => { if (btn.isConnected){ delete btn.dataset.armed; btn.textContent = old; } }, 4000);
+}
+
+function makeEntry(o){
+  const b = getB(o.baustelleId), t = getT(o.taetigkeitId);
+  return {
+    person:o.person, baustelleId:o.baustelleId, baustelle:b ? b.name : "", ort:b ? (b.ort || "") : "", kmEinfach:b ? (b.kmEinfach || 0) : 0,
+    taetigkeitId:o.taetigkeitId || "", taetigkeit:t ? t.name : "", notiz:o.notiz || "",
+    start:o.start, ende:o.ende, pauseMin:Math.round(o.pauseMs / 60000),
+    nettoMin:Math.max(0, Math.round((o.ende - o.start - o.pauseMs) / 60000)),
+    datum:dkey(o.start), quelle:o.quelle, erstellt:o.erstellt || Date.now(), geaendert:Date.now()
+  };
+}
+
+function openFinish(){
+  const run = laufend(); if (!run) return;
+  const now = Date.now();
+  let pausen = (run.pausen || []).slice(), ende = now;
+  const last = pausen[pausen.length - 1];
+  if (last && last.bis == null){ ende = last.von; pausen = pausen.slice(0, -1); } // Stopp in der Pause: Arbeit endete mit Pausenbeginn
+  const pMs = pausenMs(pausen, ende);
+  const net = Math.max(0, Math.round((ende - run.start - pMs) / 60000));
+  const b = getB(run.baustelleId), t = getT(run.taetigkeitId);
+  openSheet(`<h2>Arbeitszeit beenden</h2>
+    <dl class="kv"><dt>Baustelle</dt><dd>${esc(b ? b.name : "–")}</dd><dt>Tätigkeit</dt><dd>${esc(t ? t.name : "Ohne Tätigkeit")}</dd>
+      <dt>Zeit</dt><dd>${hm(run.start)} – ${hm(ende)} Uhr</dd><dt>Pause</dt><dd>${Math.round(pMs / 60000)} min</dd><dt>Arbeitszeit</dt><dd><b>${fmtMin(net)} h</b></dd></dl>
+    <label class="field"><span>Was wurde gemacht?</span><textarea id="finNotiz" placeholder="z. B. Pfeifen ausgebaut und gereinigt"></textarea></label>
+    <div class="actions"><button class="btn danger" id="finDrop">Zeit verwerfen</button>
+      <div><button class="btn" id="finBack">Weiterlaufen lassen</button><button class="btn primary" id="finSave">Speichern</button></div></div>`, p => {
+    p.querySelector("#finBack").onclick = closeSheet;
+    p.querySelector("#finDrop").onclick = ev => confirmBtn(ev.currentTarget, "Wirklich verwerfen?", () => { del("laufend/" + me()); closeSheet(); toast("Zeit verworfen"); });
+    p.querySelector("#finSave").onclick = () => {
+      const e = makeEntry({person:me(), baustelleId:run.baustelleId, taetigkeitId:run.taetigkeitId, start:run.start, ende, pauseMs:pMs, notiz:p.querySelector("#finNotiz").value.trim(), quelle:"stempeluhr"});
+      put("eintraege/" + newId("e"), e);
+      del("laufend/" + me());
+      closeSheet(); toast(`Gespeichert: ${fmtMin(e.nettoMin)} h auf ${e.baustelle}`);
+    };
+  });
+}
+
+function openEintrag(e){
+  const isNew = !e;
+  const datum = e ? e.datum : dkey(Date.now());
+  const bsAll = baustellen().filter(b => !b.archiviert || (e && b.id === e.baustelleId));
+  const tsAll = taetigkeiten().filter(t => !t.archiviert || (e && t.id === e.taetigkeitId));
+  if (!bsAll.length){ toast("Leg zuerst eine Baustelle an."); return; }
+  openSheet(`<h2>${isNew ? "Zeit nachtragen" : "Eintrag bearbeiten"}</h2>
+    ${e && e.person !== me() ? `<p class="muted small">Eintrag von ${esc(pName(e.person))}</p>` : ""}
+    <label class="field"><span>Datum</span><input type="date" id="fDatum" value="${datum}" required></label>
+    <div class="fields3">
+      <label class="field"><span>Beginn</span><input type="time" id="fVon" value="${e ? hm(e.start) : ""}" required></label>
+      <label class="field"><span>Ende</span><input type="time" id="fBis" value="${e ? hm(e.ende) : ""}" required></label>
+      <label class="field"><span>Pause (min)</span><input type="number" id="fPause" min="0" step="1" inputmode="numeric" value="${e ? (e.pauseMin || 0) : 0}"></label>
+    </div>
+    <label class="field"><span>Baustelle</span><select id="fB">${options(bsAll, e ? e.baustelleId : S.sel.b)}</select></label>
+    <label class="field"><span>Tätigkeit</span><select id="fT">${options(tsAll, e ? e.taetigkeitId : S.sel.t, "Ohne Tätigkeit")}</select></label>
+    <label class="field"><span>Was wurde gemacht?</span><textarea id="fNotiz">${esc(e ? e.notiz : "")}</textarea></label>
+    <p class="err" id="fErr" hidden></p>
+    <div class="actions">${isNew ? "<span></span>" : `<button class="btn danger" id="fDel">Löschen</button>`}
+      <div><button class="btn" id="fCancel">Abbrechen</button><button class="btn primary" id="fSave">Speichern</button></div></div>`, p => {
+    p.querySelector("#fCancel").onclick = closeSheet;
+    const d = p.querySelector("#fDel");
+    if (d) d.onclick = ev => confirmBtn(ev.currentTarget, "Wirklich löschen?", () => { del("eintraege/" + e.id); closeSheet(); toast("Eintrag gelöscht"); });
+    p.querySelector("#fSave").onclick = () => {
+      const err = p.querySelector("#fErr");
+      const dt = p.querySelector("#fDatum").value, v = p.querySelector("#fVon").value, bi = p.querySelector("#fBis").value;
+      const pause = Math.max(0, parseInt(p.querySelector("#fPause").value, 10) || 0);
+      if (!dt || !v || !bi){ err.textContent = "Bitte Datum, Beginn und Ende eintragen."; err.hidden = false; return; }
+      const start = new Date(dt + "T" + v).getTime(); let ende = new Date(dt + "T" + bi).getTime();
+      if (ende <= start) ende += 86400000; // über Mitternacht
+      if (pause * 60000 >= ende - start){ err.textContent = "Die Pause ist länger als die gesamte Zeit. Bitte prüfen."; err.hidden = false; return; }
+      const entry = makeEntry({person:e ? e.person : me(), baustelleId:p.querySelector("#fB").value, taetigkeitId:p.querySelector("#fT").value,
+        start, ende, pauseMs:pause * 60000, notiz:p.querySelector("#fNotiz").value.trim(), quelle:e ? e.quelle : "nachgetragen", erstellt:e ? e.erstellt : 0});
+      put("eintraege/" + (e ? e.id : newId("e")), entry);
+      closeSheet(); toast(isNew ? `Nachgetragen: ${fmtMin(entry.nettoMin)} h` : "Änderung gespeichert");
+    };
+  });
+}
+
+function openBaustelle(b){
+  openSheet(`<h2>${b ? "Baustelle bearbeiten" : "Neue Baustelle"}</h2>
+    <label class="field"><span>Name</span><input id="bName" value="${esc(b ? b.name : "")}" placeholder="z. B. Jägerwirt" required></label>
+    <label class="field"><span>Ort</span><input id="bOrt" value="${esc(b ? b.ort : "")}" placeholder="z. B. Fürstenzell"></label>
+    <label class="field"><span>Entfernung einfach (km)</span><input type="number" id="bKm" min="0" step="0.1" inputmode="decimal" value="${b && b.kmEinfach ? b.kmEinfach : ""}" placeholder="z. B. 15"></label>
+    <p class="muted small">Pro Arbeitstag rechnet die App Hin- und Rückfahrt, also das Doppelte.</p>
+    <p class="err" id="bErr" hidden></p>
+    <div class="actions">${b ? `<button class="btn" id="bArch">${b.archiviert ? "Wieder aktivieren" : "Archivieren"}</button>` : "<span></span>"}
+      <div><button class="btn" id="bCancel">Abbrechen</button><button class="btn primary" id="bSave">Speichern</button></div></div>`, p => {
+    p.querySelector("#bCancel").onclick = closeSheet;
+    const a = p.querySelector("#bArch");
+    if (a) a.onclick = () => { put("baustellen/" + b.id, {name:b.name, ort:b.ort || "", kmEinfach:b.kmEinfach || 0, archiviert:!b.archiviert, erstellt:b.erstellt || Date.now()}); closeSheet(); toast(b.archiviert ? "Baustelle wieder aktiv" : "Baustelle archiviert"); };
+    p.querySelector("#bSave").onclick = () => {
+      const name = p.querySelector("#bName").value.trim();
+      if (!name){ const e = p.querySelector("#bErr"); e.textContent = "Bitte einen Namen eintragen."; e.hidden = false; return; }
+      const km = parseFloat(String(p.querySelector("#bKm").value).replace(",", ".")) || 0;
+      const id = b ? b.id : newId("b");
+      put("baustellen/" + id, {name, ort:p.querySelector("#bOrt").value.trim(), kmEinfach:Math.max(0, km), archiviert:b ? !!b.archiviert : false, erstellt:b ? (b.erstellt || Date.now()) : Date.now()});
+      if (!b) S.sel.b = id;
+      closeSheet(); toast(b ? "Baustelle gespeichert" : "Baustelle angelegt");
+    };
+  });
+}
+
+function openTaetigkeit(t){
+  openSheet(`<h2>${t ? "Tätigkeit bearbeiten" : "Neue Tätigkeit"}</h2>
+    <label class="field"><span>Bezeichnung</span><input id="tName" value="${esc(t ? t.name : "")}" placeholder="z. B. Intonation" required></label>
+    <p class="err" id="tErr" hidden></p>
+    <div class="actions">${t ? `<button class="btn" id="tArch">${t.archiviert ? "Wieder aktivieren" : "Archivieren"}</button>` : "<span></span>"}
+      <div><button class="btn" id="tCancel">Abbrechen</button><button class="btn primary" id="tSave">Speichern</button></div></div>`, p => {
+    p.querySelector("#tCancel").onclick = closeSheet;
+    const a = p.querySelector("#tArch");
+    if (a) a.onclick = () => { put("taetigkeiten/" + t.id, {name:t.name, archiviert:!t.archiviert}); closeSheet(); };
+    p.querySelector("#tSave").onclick = () => {
+      const name = p.querySelector("#tName").value.trim();
+      if (!name){ const e = p.querySelector("#tErr"); e.textContent = "Bitte eine Bezeichnung eintragen."; e.hidden = false; return; }
+      put("taetigkeiten/" + (t ? t.id : newId("t")), {name, archiviert:t ? !!t.archiviert : false});
+      closeSheet(); toast("Tätigkeit gespeichert");
+    };
+  });
+}
+
+/* ---------- Export ---------- */
+async function save(filename, data){
+  if (!S.dl){ toast("Speichern ist in dieser Ansicht nicht möglich."); return; }
+  try{ await S.dl.save({filename, data}); toast("Datei gespeichert"); }
+  catch(e){
+    if (e && e.code === "declined") return;
+    if (e && e.code === "rate_limited"){ toast("Bitte kurz warten und noch einmal tippen."); return; }
+    toast("Die Datei konnte nicht gespeichert werden.");
+  }
+}
+const evalName = (d, ext) => `Stundennachweis_${slug(d.bLabel)}_${slug(d.r.label)}.${ext}`;
+const pdfText = s => String(s || "").replace(/[–—]/g, "-").replace(/[„“”]/g, '"');
+
+async function exportPDF(){
+  if (!window.jspdf){ toast("Die PDF-Erzeugung konnte nicht geladen werden."); return; }
+  const d = evalData();
+  const doc = new window.jspdf.jsPDF({unit:"mm", format:"a4"});
+  const ink = [22, 33, 30];
+  doc.setTextColor(...ink);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(17); doc.text("Stundennachweis", 14, 18);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+  const b = d.b;
+  const lines = [["Baustelle", d.bLabel + (b && b.ort ? ", " + b.ort : "")], ["Zeitraum", d.r.label], ["Person", S.ev.p ? pName(S.ev.p) : "Alle Personen"], ["Erstellt am", fmtDate(dkey(Date.now()))]];
+  let y = 27;
+  lines.forEach(([k, v]) => { doc.setTextColor(90, 105, 100); doc.text(k, 14, y); doc.setTextColor(...ink); doc.text(pdfText(v), 44, y); y += 5.5; });
+  y += 2;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text(`Arbeitszeit gesamt: ${fmtMin(d.total)} h (${fmtDec(d.total)} h)    Arbeitstage: ${d.days}    Kilometer: ${fmtKm(d.km)}`, 14, y);
+  y += 6;
+  const head = {fillColor:[35, 52, 47], textColor:255, fontStyle:"bold"};
+  doc.autoTable({startY:y, head:[["Person", "Tage", "Stunden", "Dezimal", "km"]],
+    body:d.persons.map(p => [pdfText(pName(p.id)), p.days.size, fmtMin(p.min), fmtDec(p.min), fmtKm(p.km)]),
+    foot:[["Summe", d.days, fmtMin(d.total), fmtDec(d.total), fmtKm(d.km)]],
+    styles:{fontSize:9}, headStyles:head, footStyles:{fillColor:[226, 232, 229], textColor:ink, fontStyle:"bold"},
+    columnStyles:{1:{halign:"right"}, 2:{halign:"right"}, 3:{halign:"right"}, 4:{halign:"right"}}, margin:{left:14, right:14}});
+  const cols = ["Datum", "Person"].concat(S.ev.b ? [] : ["Baustelle"]).concat(["Arbeit", "Zeit", "Pause", "Std."]);
+  doc.autoTable({startY:doc.lastAutoTable.finalY + 8, head:[cols],
+    body:d.es.map(e => [wday(e.datum) + " " + fmtDate(e.datum), pdfText(pName(e.person))].concat(S.ev.b ? [] : [pdfText(eB(e))]).concat([pdfText([eT(e), e.notiz].filter(Boolean).join(" · ")), hm(e.start) + "-" + hm(e.ende), e.pauseMin ? e.pauseMin + " min" : "-", fmtMin(e.nettoMin)])),
+    styles:{fontSize:8.5, cellPadding:1.8}, headStyles:head, margin:{left:14, right:14},
+    columnStyles:{0:{cellWidth:24}}});
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++){ doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Seite ${i} von ${n}`, 196, 290, {align:"right"}); }
+  await save(evalName(d, "pdf"), doc.output("arraybuffer"));
+}
+
+function entryRows(list){
+  const h = ["ID", "Datum", "KW", "Wochentag", "Person", "Baustelle", "Ort", "Tätigkeit", "Beschreibung", "Beginn", "Ende", "Pause (min)", "Arbeitszeit (min)", "Arbeitszeit (h)", "km einfach", "Quelle"];
+  return [h].concat(list.slice().sort((a, b) => a.start - b.start).map(e => {
+    const b = getB(e.baustelleId);
+    return [e.id, fmtDate(e.datum), kw(e.datum), wday(e.datum), pName(e.person), eB(e), (b && b.ort) || e.ort || "", eT(e), e.notiz || "", hm(e.start), hm(e.ende), e.pauseMin || 0, e.nettoMin, +(e.nettoMin / 60).toFixed(2), eKm(e), e.quelle || ""];
+  }));
+}
+async function exportXLSX(){
+  if (!window.XLSX){ toast("Die Excel-Erzeugung konnte nicht geladen werden."); return; }
+  const d = evalData(), X = window.XLSX, wb = X.utils.book_new();
+  const sum = [["Stundennachweis"], ["Baustelle", d.bLabel], ["Zeitraum", d.r.label], ["Erstellt am", fmtDate(dkey(Date.now()))], [],
+    ["Person", "Tage", "Stunden (h:mm)", "Stunden (dezimal)", "km"]]
+    .concat(d.persons.map(p => [pName(p.id), p.days.size, fmtMin(p.min), +(p.min / 60).toFixed(2), p.km]))
+    .concat([["Summe", d.days, fmtMin(d.total), +(d.total / 60).toFixed(2), d.km]]);
+  X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(sum), "Übersicht");
+  X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(entryRows(d.es)), "Einzelnachweis");
+  await save(evalName(d, "xlsx"), X.write(wb, {bookType:"xlsx", type:"array"}));
+}
+async function exportAll(kind){
+  const stamp = dkey(Date.now());
+  if (kind === "csv"){
+    const csv = "﻿" + entryRows(eintraege()).map(r => r.map(c => { const s = String(c).replace(/"/g, '""'); return /[;"\n]/.test(s) ? `"${s}"` : s; }).join(";")).join("\r\n");
+    await save(`Zeiterfassung_Eintraege_${stamp}.csv`, csv); return;
+  }
+  if (!window.XLSX){ toast("Die Excel-Erzeugung konnte nicht geladen werden."); return; }
+  const X = window.XLSX, wb = X.utils.book_new();
+  X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(entryRows(eintraege())), "Einträge");
+  X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([["ID", "Name", "Ort", "km einfach", "Archiviert"]].concat(baustellen().map(b => [b.id, b.name, b.ort || "", b.kmEinfach || 0, b.archiviert ? "ja" : "nein"]))), "Baustellen");
+  X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([["ID", "Bezeichnung", "Archiviert"]].concat(taetigkeiten().map(t => [t.id, t.name, t.archiviert ? "ja" : "nein"]))), "Tätigkeiten");
+  await save(`Zeiterfassung_alle_Daten_${stamp}.xlsx`, X.write(wb, {bookType:"xlsx", type:"array"}));
+}
+
+/* ---------- Bedienung ---------- */
+document.querySelector(".tabs").addEventListener("click", e => {
+  const b = e.target.closest("button[data-tab]"); if (!b) return;
+  S.tab = b.dataset.tab; LS.set("zt.tab", S.tab); render(); window.scrollTo(0, 0);
+});
+$("#main").addEventListener("click", e => {
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  const act = el.dataset.act, id = el.dataset.id, now = Date.now(), run = laufend();
+  switch (act){
+    case "start":
+      if (!S.sel.b) return;
+      put("laufend/" + me(), {person:me(), baustelleId:S.sel.b, taetigkeitId:S.sel.t || "", start:now, pausen:[], status:"laeuft"});
+      if (navigator.vibrate) navigator.vibrate(30); break;
+    case "pause": if (run) put("laufend/" + me(), {...strip(run), pausen:(run.pausen || []).concat([{von:now, bis:null}]), status:"pause"}); break;
+    case "resume": if (run){ const p = (run.pausen || []).map(x => ({...x})); const l = p[p.length - 1]; if (l && l.bis == null) l.bis = now; put("laufend/" + me(), {...strip(run), pausen:p, status:"laeuft"}); } break;
+    case "stop": openFinish(); break;
+    case "new-e": openEintrag(null); break;
+    case "edit-e": openEintrag(eintraege().find(x => x.id === id)); break;
+    case "new-b": openBaustelle(null); break;
+    case "edit-b": openBaustelle(getB(id)); break;
+    case "new-t": openTaetigkeit(null); break;
+    case "edit-t": openTaetigkeit(getT(id)); break;
+    case "toggle-arch": S.showArch = !S.showArch; render(); break;
+    case "wer": S.ls.wer = el.dataset.v; LS.set("zt.ls", S.ls); render(); break;
+    case "exp-pdf": exportPDF(); break;
+    case "exp-xlsx": exportXLSX(); break;
+    case "all-xlsx": exportAll("xlsx"); break;
+    case "all-csv": exportAll("csv"); break;
+  }
+});
+function strip(o){ const c = {...o}; delete c.id; return c; }
+$("#main").addEventListener("change", e => {
+  const t = e.target;
+  switch (t.id){
+    case "selB": S.sel.b = t.value; LS.set("zt.sel", S.sel); break;
+    case "selT": S.sel.t = t.value; LS.set("zt.sel", S.sel); break;
+    case "lsMonat": S.ls.monat = t.value; LS.set("zt.ls", S.ls); render(); break;
+    case "evB": S.ev.b = t.value; S.ev.chosen = true; LS.set("zt.ev", S.ev); render(); break;
+    case "evZeit": S.ev.zeit = t.value; LS.set("zt.ev", S.ev); render(); break;
+    case "evP": S.ev.p = t.value; LS.set("zt.ev", S.ev); render(); break;
+    case "evVon": S.ev.von = t.value; LS.set("zt.ev", S.ev); render(); break;
+    case "evBis": S.ev.bis = t.value; LS.set("zt.ev", S.ev); render(); break;
+  }
+});
+
+/* ---------- Start ---------- */
+function subscribe(){
+  for (const name of ["baustellen", "taetigkeiten", "eintraege", "laufend"]){
+    S.db.collection(name).onSnapshot(q => {
+      const m = new Map();
+      q.docs.forEach(d => { if (d.exists) m.set(d.id, {...d.data(), id:d.id}); });
+      S.snap[name] = m; S.loaded[name] = true; scheduleRender();
+    }, () => showBanner("Die Verbindung zur Datenbank wurde unterbrochen. Bitte lade die Seite neu."));
+  }
+}
+(async () => {
+  render();
+  const use = n => (window.claude && window.claude.use) ? window.claude.use(n).then(x => x, () => null) : Promise.resolve(null);
+  const [db, user, dl] = await Promise.all([use("db"), use("user"), use("downloads")]);
+  S.user = user; S.dl = dl;
+  if (user){ try{ S.uid = await user.id(); }catch(e){} }
+  if (db){
+    S.db = db; S.dbState = "ok";
+    // Offline auf diesem Gerät erfasste Daten dem angemeldeten Nutzer zuordnen
+    if (S.uid){
+      S.outbox.forEach(op => {
+        if (op.path === "laufend/lokal") op.path = "laufend/" + S.uid;
+        if (op.data && op.data.person === "lokal") op.data.person = S.uid;
+      });
+      LS.set("zt.outbox", S.outbox);
+    }
+    subscribe(); flush();
+  } else {
+    S.dbState = "none";
+    showBanner("Keine Verbindung zur Online-Datenbank. Deine Zeiten bleiben vorerst auf diesem Gerät und werden übertragen, sobald du die App wieder online in Claude öffnest.");
+  }
+  render();
+})();
+setInterval(tick, 1000);
+setInterval(flush, 20000);
+window.addEventListener("online", flush);
+document.addEventListener("visibilitychange", () => { if (!document.hidden){ tick(); flush(); } });
+</script>
