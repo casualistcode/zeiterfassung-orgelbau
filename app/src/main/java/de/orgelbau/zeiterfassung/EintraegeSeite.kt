@@ -23,7 +23,7 @@ fun EintraegeSeite(vm: AppViewModel) {
     val tage = meine.groupBy { it.datum }.toSortedMap(Comparator.reverseOrder())
 
     SeitenRahmen("Einträge", vm.person) {
-        GrosserKnopf("ZEIT NACHTRAGEN", MaterialTheme.colorScheme.primary, hoehe = 72, onClick = vm::zeitNachtragen)
+        GrosserKnopf("Zeit nachtragen", MaterialTheme.colorScheme.primary, hoehe = 72, onClick = vm::zeitNachtragen)
         if (tage.isEmpty()) {
             Text("Noch keine Einträge.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

@@ -20,8 +20,8 @@ class AuswertungTest {
         )
 
     private val baustellen = listOf(
-        Baustelle("a", "Kößlarn", "Kößlarn", 20.0, false),
-        Baustelle("b", "Denkhof", "", null, false),
+        Baustelle("a", "Baustelle A", "Ort A", 20.0, false),
+        Baustelle("b", "Baustelle B", "", null, false),
     )
 
     @Test

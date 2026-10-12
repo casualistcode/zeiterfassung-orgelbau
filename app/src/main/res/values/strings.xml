@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Zeiterfassung</string>
+    <string name="widget_beschreibung">Start, Pause und Stopp direkt vom Startbildschirm</string>
 </resources>

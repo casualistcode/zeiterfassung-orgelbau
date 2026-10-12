@@ -55,10 +55,9 @@ fun EintragFormular(vm: AppViewModel, start: EintragEntwurf) {
     ) {
         Column {
             Text(
-                (if (e.id == null) "Zeit nachtragen" else "Eintrag bearbeiten").uppercase(),
-                style = MaterialTheme.typography.titleLarge,
+                if (e.id == null) "Zeit nachtragen" else "Eintrag bearbeiten",
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
             )
             Text(e.person, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -120,7 +119,7 @@ fun EintragFormular(vm: AppViewModel, start: EintragEntwurf) {
             )
         }
 
-        GrosserKnopf("SPEICHERN", farben.laeuft, enabled = baustelle != null && taetigkeit != null, hoehe = 72) {
+        GrosserKnopf("Speichern", farben.laeuft, enabled = baustelle != null && taetigkeit != null, hoehe = 72) {
             vm.formularSpeichern(e)
         }
         OutlinedButton(

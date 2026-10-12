@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
@@ -66,8 +67,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         .flatMapLatest { u -> if (u == null) flowOf(null) else db.laufend(u).map { Lauf(it) } }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** Vom Widget: Stopp wurde gedrückt, die App soll gleich „Was wurde gemacht?“ fragen. */
+    var stoppAngefragt by mutableStateOf(false)
+
     init {
         anmelden()
+        // Widget auf dem Startbildschirm aktuell halten
+        viewModelScope.launch {
+            lauf.collect {
+                try {
+                    ZeitWidget().updateAll(getApplication())
+                } catch (_: Exception) {
+                }
+            }
+        }
     }
 
     fun anmelden() {
@@ -79,11 +92,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 keinInternet = true
                 return@launch
-            }
-            try {
-                db.anfangsbestandAnlegen()
-            } catch (_: Exception) {
-                // ohne Netz: beim nächsten Start erneut versuchen
             }
         }
     }
@@ -117,18 +125,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         db.starten(u, person ?: "", b, t, System.currentTimeMillis())
     }
 
-    fun pause() {
+    fun pauseUmschalten() {
         val u = uid ?: return
         val l = lauf.value?.wert ?: return
-        if (l.inPause) return
-        db.pausenSetzen(u, l.pausen + Pause(System.currentTimeMillis(), null))
-    }
-
-    fun weiter() {
-        val u = uid ?: return
-        val l = lauf.value?.wert ?: return
-        val jetzt = System.currentTimeMillis()
-        db.pausenSetzen(u, l.pausen.map { if (it.bis == null) it.copy(bis = jetzt) else it })
+        db.pauseUmschalten(u, l, System.currentTimeMillis())
     }
 
     fun stoppen(notiz: String, zeitpunkt: Long) {

@@ -3,6 +3,7 @@ package de.orgelbau.zeiterfassung
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,13 +16,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,7 +35,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,27 +50,28 @@ import java.time.LocalTime
 fun GrosserKnopf(
     text: String,
     farbe: Color,
+    modifier: Modifier = Modifier.fillMaxWidth(),
     enabled: Boolean = true,
-    hoehe: Int = 96,
+    hoehe: Int = 88,
     onClick: () -> Unit,
 ) {
     Button(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(28.dp),
         colors = ButtonDefaults.buttonColors(containerColor = farbe, contentColor = Color.White),
-        modifier = Modifier.fillMaxWidth().height(hoehe.dp),
+        modifier = modifier.height(hoehe.dp),
     ) {
-        Text(text, fontSize = if (hoehe >= 90) 28.sp else 20.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+        Text(text, fontSize = if (hoehe >= 80) 24.sp else 18.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
     }
 }
 
 @Composable
 fun Beschriftung(text: String, modifier: Modifier = Modifier) {
     Text(
-        text.uppercase(),
+        text,
         style = MaterialTheme.typography.labelLarge,
-        letterSpacing = 1.sp,
+        fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier,
     )
@@ -73,7 +81,7 @@ fun Beschriftung(text: String, modifier: Modifier = Modifier) {
 fun Karte(content: @Composable ColumnScope.() -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth(),
         content = content,
     )
@@ -81,40 +89,80 @@ fun Karte(content: @Composable ColumnScope.() -> Unit) {
 
 /** Kleines farbiges Schild, z. B. „km fehlt“ oder „Läuft“. */
 @Composable
-fun Schild(text: String, farbe: Color) {
+fun Schild(text: String, farbe: Color, textFarbe: Color = Color.White) {
     Surface(color = farbe, shape = RoundedCornerShape(50)) {
         Text(
             text,
-            color = Color.White,
+            color = textFarbe,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
         )
     }
 }
 
-/** Großes antippbares Feld mit Beschriftung darüber. */
+/**
+ * Dezenter Hinweis auf den Orgelbau: ein kleiner Pfeifenprospekt
+ * (Labialpfeifen mit Körper, Mund und kegelförmigem Fuß, Mitte am höchsten).
+ */
 @Composable
-fun WertFeld(titel: String, wert: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Beschriftung(titel)
-        OutlinedButton(
-            onClick = onClick,
-            enabled = enabled,
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            ),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
-        ) {
-            Text(wert, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            Text("▾", style = MaterialTheme.typography.titleLarge)
+fun OrgelPfeifen(modifier: Modifier, farbe: Color, mund: Color = Color.Transparent, anzahl: Int = 5) {
+    Canvas(modifier) {
+        val mitte = (anzahl - 1) / 2f
+        val spalt = size.width * 0.05f
+        val breite = (size.width - spalt * (anzahl - 1)) / anzahl
+        val fuss = size.height * 0.18f
+        val koerperUnten = size.height - fuss
+        for (i in 0 until anzahl) {
+            val abstand = kotlin.math.abs(i - mitte) / maxOf(mitte, 1f)
+            val hoehe = 1f - 0.45f * abstand
+            val x = i * (breite + spalt)
+            val oben = size.height * (1f - hoehe)
+            drawRoundRect(farbe, Offset(x, oben), Size(breite, koerperUnten - oben), CornerRadius(breite * 0.18f))
+            val p = Path().apply {
+                moveTo(x, koerperUnten)
+                lineTo(x + breite, koerperUnten)
+                lineTo(x + breite * 0.64f, size.height)
+                lineTo(x + breite * 0.36f, size.height)
+                close()
+            }
+            drawPath(p, farbe)
+            if (mund != Color.Transparent) {
+                drawRect(mund, Offset(x + breite * 0.22f, koerperUnten - breite * 0.6f), Size(breite * 0.56f, breite * 0.2f))
+            }
         }
     }
 }
 
-/** Auswahl aus einer Liste; öffnet ein Fenster mit großen Einträgen. */
+/** Großes antippbares Feld: Beschriftung und Wert in einer Fläche. */
+@Composable
+fun WertFeld(titel: String, wert: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        WertInhalt(titel, wert)
+    }
+}
+
+@Composable
+private fun WertInhalt(titel: String, wert: String) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(titel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(wert, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        }
+        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Auswahl aus einer Liste als eigene Fläche. */
 @Composable
 fun <T> AuswahlFeld(
     titel: String,
@@ -125,44 +173,60 @@ fun <T> AuswahlFeld(
 ) {
     var offen by remember { mutableStateOf(false) }
     WertFeld(titel, wert ?: "Bitte wählen", modifier, enabled = optionen.isNotEmpty()) { offen = true }
-    if (offen) {
-        AlertDialog(
-            onDismissRequest = { offen = false },
-            title = { Text(titel) },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    optionen.forEach { (id, name) ->
-                        Text(
-                            name,
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onWahl(id); offen = false }
-                                .padding(vertical = 16.dp),
-                        )
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { offen = false }) { Text("Abbrechen") } },
-        )
-    }
+    if (offen) AuswahlDialog(titel, optionen, { offen = false }, onWahl)
 }
 
-/** Zeile mit Text links und Wert rechts, z. B. in Tabellen der Auswertung. */
+/** Auswahl aus einer Liste als Zeile innerhalb einer Karte. */
+@Composable
+fun <T> AuswahlZeile(titel: String, wert: String?, optionen: List<Pair<T, String>>, onWahl: (T) -> Unit) {
+    var offen by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().clickable(enabled = optionen.isNotEmpty()) { offen = true }) {
+        WertInhalt(titel, wert ?: "Bitte wählen")
+    }
+    if (offen) AuswahlDialog(titel, optionen, { offen = false }, onWahl)
+}
+
+@Composable
+private fun <T> AuswahlDialog(titel: String, optionen: List<Pair<T, String>>, onZu: () -> Unit, onWahl: (T) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onZu,
+        title = { Text(titel) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                optionen.forEach { (id, name) ->
+                    Text(
+                        name,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onWahl(id); onZu() }
+                            .padding(vertical = 16.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onZu) { Text("Abbrechen") } },
+    )
+}
+
+/** Zeile mit Text links und Wert rechts, z. B. in Listen und Tabellen. */
 @Composable
 fun Zeile(links: String, rechts: String, unten: String? = null, fett: Boolean = false, onClick: (() -> Unit)? = null) {
     Row(
         Modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f)) {
             Text(links, fontWeight = if (fett) FontWeight.Bold else FontWeight.SemiBold)
-            if (!unten.isNullOrBlank()) Text(unten, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!unten.isNullOrBlank()) {
+                Text(unten, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+            }
         }
-        Text(rechts, fontWeight = FontWeight.Bold)
+        if (rechts.isNotEmpty()) Text(rechts, fontWeight = FontWeight.Bold)
     }
 }
 

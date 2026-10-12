@@ -77,6 +77,12 @@ fun AuswertungSeite(vm: AppViewModel) {
             )
         }
 
+        GrosserKnopf("PDF teilen", MaterialTheme.colorScheme.primary, enabled = erg.eintraege.isNotEmpty(), hoehe = 64) {
+            val ort = baustellen.find { it.id == bId }?.ort
+            val datei = PdfExport.erstellen(context, bName, ort, bereich.text, vm.awPerson, erg, mitBaustelle = bId == null)
+            PdfExport.teilen(context, datei)
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Kachel("Arbeitszeit", "${Zeitrechnung.hMin(erg.gesamtMin)} h", "${Zeitrechnung.dezimal(erg.gesamtMin)} h dezimal", Modifier.weight(1f))
             Kachel("Arbeitstage", "${erg.tage}", null, Modifier.weight(1f))

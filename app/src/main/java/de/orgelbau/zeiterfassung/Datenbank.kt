@@ -184,37 +184,27 @@ class Datenbank {
         batch.commit().addOnFailureListener { Log.w(TAG, "stoppen", it) }
     }
 
-    /**
-     * Legt beim allerersten Start die Anfangslisten an. Fragt dafür bewusst
-     * den Server (nicht den Zwischenspeicher), damit nie bearbeitete Einträge
-     * überschrieben werden. Ohne Netz passiert nichts.
-     */
-    suspend fun anfangsbestandAnlegen() {
-        val leer = db.collection("baustellen").limit(1).get(Source.SERVER).await().isEmpty
-        if (!leer) return
-        val jetzt = System.currentTimeMillis()
-        val batch = db.batch()
-        listOf(
-            Triple("jaegerwirt", "Jägerwirt", "Fürstenzell"),
-            Triple("koesslarn", "Kößlarn", "Kößlarn"),
-            Triple("denkhof", "Denkhof", "bei Passau (ca. 17 km nördlich)"),
-            Triple("werkstatt-passau", "Werkstatt Passau", "Passau"),
-        ).forEach { (id, name, ort) ->
-            batch.set(
-                db.collection("baustellen").document(id),
-                mapOf("name" to name, "ort" to ort, "kmEinfach" to null, "archiviert" to false, "erstellt" to jetzt),
-            )
-        }
-        listOf(
-            "Ausbau & Reinigung", "Einbau", "Reparatur", "Intonation", "Stimmung",
-            "Elektrik / Schaltschrank", "Vorbereitung / Material", "Sonstiges",
-        ).forEachIndexed { i, name ->
-            batch.set(
-                db.collection("taetigkeiten").document("t%02d".format(i + 1)),
-                mapOf("name" to name, "reihenfolge" to i, "archiviert" to false),
-            )
-        }
-        batch.commit().await()
+    /** Pause beginnen bzw. beenden. */
+    fun pauseUmschalten(uid: String, lauf: Laufend, jetzt: Long) {
+        pausenSetzen(
+            uid,
+            if (lauf.inPause) lauf.pausen.map { if (it.bis == null) it.copy(bis = jetzt) else it }
+            else lauf.pausen + Pause(jetzt, null),
+        )
+    }
+
+    /** Für das Widget: laufende Zeit aus dem Zwischenspeicher auf dem Handy (geht ohne Netz). */
+    suspend fun laufendAusSpeicher(uid: String): Laufend? = try {
+        val s = db.collection("laufend").document(uid).get(Source.CACHE).await()
+        if (s.exists()) zuLaufend(s) else null
+    } catch (_: Exception) {
+        null
+    }
+
+    suspend fun baustellenNameAusSpeicher(id: String): String? = try {
+        db.collection("baustellen").document(id).get(Source.CACHE).await().getString("name")
+    } catch (_: Exception) {
+        null
     }
 
     private fun zuLaufend(d: DocumentSnapshot): Laufend {
